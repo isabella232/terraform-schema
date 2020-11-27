@@ -13,7 +13,9 @@ func terraformBlockSchema(v *version.Version) *schema.BlockSchema {
 		Body: &schema.BodySchema{
 			Attributes: map[string]*schema.AttributeSchema{
 				"required_version": {
-					ValueType:  cty.String,
+					Expr: schema.ExprSchema{
+						schema.LiteralValueExpr{Type: cty.String},
+					},
 					IsOptional: true,
 					Description: lang.Markdown("Constraint to specify which versions of Terraform can be used " +
 						"with this configuration, e.g. `~> 0.12`"),
@@ -36,7 +38,9 @@ func terraformBlockSchema(v *version.Version) *schema.BlockSchema {
 					Description: lang.Markdown("What provider version to use within this configuration"),
 					Body: &schema.BodySchema{
 						AnyAttribute: &schema.AttributeSchema{
-							ValueType:   cty.String,
+							Expr: schema.ExprSchema{
+								schema.LiteralValueExpr{Type: cty.String},
+							},
 							Description: lang.Markdown("Version constraint"),
 						},
 					},
@@ -48,20 +52,28 @@ func terraformBlockSchema(v *version.Version) *schema.BlockSchema {
 
 	if v.GreaterThanOrEqual(v0_12_18) {
 		bs.Body.Attributes["experiments"] = &schema.AttributeSchema{
-			ValueType:   cty.Set(cty.DynamicPseudoType),
+			Expr: schema.ExprSchema{
+				schema.TupleExpr{
+					// TODO: StaticTraversalExpr{}?
+				},
+			},
 			IsOptional:  true,
-			Description: lang.Markdown("A set of experimental language features to enable"),
+			Description: lang.Markdown("A tuple of experimental language features to enable"),
 		}
 	}
 
 	if v.GreaterThanOrEqual(v0_12_20) {
 		bs.Body.Blocks["required_providers"].Body = &schema.BodySchema{
 			AnyAttribute: &schema.AttributeSchema{
-				ValueTypes: schema.ValueTypes{
-					cty.Object(map[string]cty.Type{
-						"version": cty.String,
-					}),
-					cty.String,
+				Expr: schema.ExprSchema{
+					schema.ObjectExpr{
+						Attributes: map[string]schema.ExprSchema{
+							"version": {
+								schema.LiteralValueExpr{Type: cty.String},
+							},
+						},
+					},
+					schema.LiteralValueExpr{Type: cty.String},
 				},
 				Description: lang.Markdown("Version constraint"),
 			},

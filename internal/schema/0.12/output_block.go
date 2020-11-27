@@ -3,6 +3,7 @@ package schema
 import (
 	"github.com/hashicorp/hcl-lang/lang"
 	"github.com/hashicorp/hcl-lang/schema"
+	"github.com/hashicorp/terraform-schema/internal/schema/refscope"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -17,25 +18,54 @@ var outputBlockSchema = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"description": {
-				ValueType:   cty.String,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.String},
+				},
 				IsOptional:  true,
 				Description: lang.PlainText("Human-readable description of the output (for documentation and UI)"),
 			},
 			"value": {
-				ValueType:   cty.DynamicPseudoType,
+				Expr: schema.ExprSchema{
+					schema.ScopeTraversalExpr{ScopeId: refscope.VariableBlock},
+					schema.ScopeTraversalExpr{ScopeId: refscope.LocalAttr},
+					schema.ScopeTraversalExpr{ScopeId: refscope.DatasourceBlock},
+					schema.ScopeTraversalExpr{ScopeId: refscope.ResourceBlock},
+					schema.ScopeTraversalExpr{ScopeId: refscope.ModuleBlock},
+					schema.LiteralValueExpr{},
+				},
 				IsRequired:  true,
 				Description: lang.PlainText("Value, typically a reference to an attribute of a resource or a data source"),
 			},
 			"sensitive": {
-				ValueType:   cty.Bool,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.Bool},
+				},
 				IsOptional:  true,
 				Description: lang.PlainText("Whether the output contains sensitive material and should be hidden in the UI"),
 			},
 			"depends_on": {
-				ValueType:   cty.Set(cty.DynamicPseudoType),
+				Expr: schema.ExprSchema{
+					schema.TupleExpr{
+						Exprs: []schema.Expr{
+							schema.ScopeTraversalExpr{ScopeId: refscope.DatasourceBlock},
+							schema.ScopeTraversalExpr{ScopeId: refscope.ResourceBlock},
+							schema.ScopeTraversalExpr{ScopeId: refscope.ModuleBlock},
+						},
+					},
+				},
 				IsOptional:  true,
 				Description: lang.PlainText("Set of references to hidden dependencies (e.g. resources or data sources)"),
 			},
+		},
+	},
+	Reference: &schema.BlockReference{
+		ScopeId: refscope.OutputBlock,
+		Type: schema.ReferenceTypes{
+			&schema.InferredRefType{AttrName: "value"},
+		},
+		Address: schema.Address{
+			schema.StaticStep{Value: "output"},
+			schema.LabelValueStep{Index: 0},
 		},
 	},
 }

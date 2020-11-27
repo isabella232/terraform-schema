@@ -3,8 +3,9 @@ package schema
 import (
 	"github.com/hashicorp/hcl-lang/lang"
 	"github.com/hashicorp/hcl-lang/schema"
-	"github.com/zclconf/go-cty/cty"
 )
+
+const resourceBlockScope = schema.ScopeId("resource")
 
 var resourceBlockSchema = &schema.BlockSchema{
 	Labels: []*schema.LabelSchema{
@@ -24,11 +25,21 @@ var resourceBlockSchema = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"provider": {
-				ValueType:   cty.DynamicPseudoType,
+				Expr: schema.ExprSchema{
+					schema.ScopeTraversalExpr{ScopeId: providerBlockScope},
+				},
 				IsOptional:  true,
 				Description: lang.Markdown("Reference to a `provider` configuration block, e.g. `mycloud.west` or `mycloud`"),
 				IsDepKey:    true,
 			},
+		},
+	},
+	Reference: &schema.BlockReference{
+		ScopeId: resourceBlockScope,
+		Type:    &schema.InferredRefType{},
+		Address: schema.Address{
+			schema.LabelValueStep{Index: 0},
+			schema.LabelValueStep{Index: 1},
 		},
 	},
 }

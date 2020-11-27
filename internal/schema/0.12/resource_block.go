@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hcl-lang/lang"
 	"github.com/hashicorp/hcl-lang/schema"
+	"github.com/hashicorp/terraform-schema/internal/schema/refscope"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -26,18 +27,30 @@ func resourceBlockSchema(v *version.Version) *schema.BlockSchema {
 		Body: &schema.BodySchema{
 			Attributes: map[string]*schema.AttributeSchema{
 				"provider": {
-					ValueType:   cty.DynamicPseudoType,
+					Expr: schema.ExprSchema{
+						schema.ScopeTraversalExpr{ScopeId: refscope.ProviderBlock},
+					},
 					IsOptional:  true,
 					Description: lang.Markdown("Reference to a `provider` configuration block, e.g. `mycloud.west` or `mycloud`"),
 					IsDepKey:    true,
 				},
 				"count": {
-					ValueType:   cty.Number,
+					Expr: schema.ExprSchema{
+						schema.LiteralValueExpr{Type: cty.Number},
+					},
 					IsOptional:  true,
 					Description: lang.Markdown("Number of instances of this resource, e.g. `3`"),
 				},
 				"depends_on": {
-					ValueType:   cty.Set(cty.DynamicPseudoType),
+					Expr: schema.ExprSchema{
+						schema.TupleExpr{
+							Exprs: []schema.Expr{
+								schema.ScopeTraversalExpr{ScopeId: refscope.DatasourceBlock},
+								schema.ScopeTraversalExpr{ScopeId: refscope.ResourceBlock},
+								schema.ScopeTraversalExpr{ScopeId: refscope.ModuleBlock},
+							},
+						},
+					},
 					IsOptional:  true,
 					Description: lang.Markdown("Set of references to hidden dependencies, e.g. other resources or data sources"),
 				},
@@ -47,13 +60,24 @@ func resourceBlockSchema(v *version.Version) *schema.BlockSchema {
 				"connection": connectionBlock,
 			},
 		},
+		Reference: &schema.BlockReference{
+			ScopeId: refscope.ResourceBlock,
+		},
 	}
 
 	if v.GreaterThanOrEqual(v0_12_6) {
 		bs.Body.Attributes["for_each"] = &schema.AttributeSchema{
-			ValueTypes: schema.ValueTypes{
-				cty.Set(cty.DynamicPseudoType),
-				cty.Map(cty.DynamicPseudoType),
+			Expr: schema.ExprSchema{
+				schema.LiteralValueExpr{Type: cty.Set(cty.DynamicPseudoType)},
+				schema.LiteralValueExpr{Type: cty.Map(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.DatasourceBlock, OfType: cty.Set(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.DatasourceBlock, OfType: cty.Map(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.ResourceBlock, OfType: cty.Set(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.ResourceBlock, OfType: cty.Map(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.VariableBlock, OfType: cty.Set(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.VariableBlock, OfType: cty.Map(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.LocalAttr, OfType: cty.Set(cty.DynamicPseudoType)},
+				schema.ScopeTraversalExpr{ScopeId: refscope.LocalAttr, OfType: cty.Map(cty.DynamicPseudoType)},
 			},
 			IsOptional:  true,
 			Description: lang.Markdown("A set or a map where each item represents an instance of this resource"),
@@ -68,21 +92,29 @@ var lifecycleBlock = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"create_before_destroy": {
-				ValueType:  cty.Bool,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.Bool},
+				},
 				IsOptional: true,
 				Description: lang.Markdown("Whether to reverse the default order of operations (destroy -> create) during apply " +
 					"when the resource requires replacement (cannot be updated in-place)"),
 			},
 			"prevent_destroy": {
-				ValueType:  cty.Bool,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.Bool},
+				},
 				IsOptional: true,
 				Description: lang.Markdown("Whether to prevent accidental destruction of the resource and cause Terraform " +
 					"to reject with an error any plan that would destroy the resource"),
 			},
 			"ignore_changes": {
-				ValueType:   cty.Set(cty.DynamicPseudoType),
+				Expr: schema.ExprSchema{
+					schema.TupleExpr{
+						// TODO: Refer to fields here somehow
+					},
+				},
 				IsOptional:  true,
-				Description: lang.Markdown("A set of fields (references) of which to ignore changes to, e.g. `tags`"),
+				Description: lang.Markdown("A tuple of fields (references) of which to ignore changes to, e.g. `tags`"),
 			},
 		},
 	},
@@ -101,14 +133,18 @@ var provisionerBlock = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"when": {
-				ValueType:  cty.DynamicPseudoType,
+				Expr: schema.ExprSchema{
+					// TODO: StaticTraversalExpr{create / destroy}?
+				},
 				IsOptional: true,
 				Description: lang.Markdown("When to run the provisioner - `create` or `destroy`, defaults to `create` " +
 					"(i.e. after creation of the resource)"),
 			},
 			"on_failure": {
 				IsOptional: true,
-				ValueType:  cty.DynamicPseudoType,
+				Expr:       schema.ExprSchema{
+					// TODO: StaticTraversalExpr{fail / continue}?
+				},
 				Description: lang.Markdown("What to do when the provisioner run fails to finish - `fail` (default), " +
 					"or `continue` (ignore the error)"),
 			},
@@ -125,7 +161,9 @@ var connectionBlock = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"type": {
-				ValueType:   cty.String,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.String},
+				},
 				IsOptional:  true,
 				Description: lang.Markdown("Connection type to use - `ssh` (default) or `winrm`"),
 			},

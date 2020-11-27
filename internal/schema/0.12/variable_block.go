@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hcl-lang/lang"
 	"github.com/hashicorp/hcl-lang/schema"
+	"github.com/hashicorp/terraform-schema/internal/schema/refscope"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -20,22 +21,35 @@ func variableBlockSchema(v *version.Version) *schema.BlockSchema {
 		Body: &schema.BodySchema{
 			Attributes: map[string]*schema.AttributeSchema{
 				"description": {
-					ValueType:   cty.String,
+					Expr: schema.ExprSchema{
+						schema.LiteralValueExpr{Type: cty.String},
+					},
 					IsOptional:  true,
 					Description: lang.Markdown("Description to document the purpose of the variable and what value is expected"),
 				},
 				"type": {
-					ValueType:   cty.DynamicPseudoType,
+					// TODO: Expr: TypeConstraintExpr
 					IsOptional:  true,
 					Description: lang.Markdown("Type constraint restricting the type of value to accept, e.g. `string` or `list(string)`"),
 				},
 				"default": {
-					ValueType:   cty.DynamicPseudoType,
+					// TODO: Extr: LiteralOfType{AttrName: "type"}
 					IsOptional:  true,
 					Description: lang.Markdown("Default value to use when variable is not explicitly set"),
 				},
 			},
 			Blocks: make(map[string]*schema.BlockSchema, 0),
+		},
+		Reference: &schema.BlockReference{
+			ScopeId: refscope.VariableBlock,
+			Type: schema.ReferenceTypes{
+				&schema.RefTypeFromConstraint{AttrName: "type"},
+				&schema.InferredRefType{AttrName: "default"},
+			},
+			Address: schema.Address{
+				schema.StaticStep{Value: "var"},
+				schema.LabelValueStep{Index: 0},
+			},
 		},
 	}
 
@@ -45,13 +59,17 @@ func variableBlockSchema(v *version.Version) *schema.BlockSchema {
 			Body: &schema.BodySchema{
 				Attributes: map[string]*schema.AttributeSchema{
 					"condition": {
-						ValueType:  cty.Bool,
+						Expr: schema.ExprSchema{
+							schema.LiteralValueExpr{Type: cty.Bool},
+						},
 						IsRequired: true,
 						Description: lang.Markdown("Condition under which a variable value is valid, " +
 							"e.g. `length(var.example) >= 4` enforces minimum of 4 characters"),
 					},
 					"error_message": {
-						ValueType:  cty.String,
+						Expr: schema.ExprSchema{
+							schema.LiteralValueExpr{Type: cty.String},
+						},
 						IsRequired: true,
 						Description: lang.Markdown("Error message to present when the variable is considered invalid, " +
 							"i.e. when `condition` evaluates to `false`"),

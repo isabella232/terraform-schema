@@ -6,6 +6,8 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+const providerBlockScope = schema.ScopeId("provider")
+
 var providerBlockSchema = &schema.BlockSchema{
 	Labels: []*schema.LabelSchema{
 		{
@@ -18,10 +20,19 @@ var providerBlockSchema = &schema.BlockSchema{
 	Body: &schema.BodySchema{
 		Attributes: map[string]*schema.AttributeSchema{
 			"alias": {
-				ValueType:   cty.String,
+				Expr: schema.ExprSchema{
+					schema.LiteralValueExpr{Type: cty.String},
+				},
 				IsOptional:  true,
 				Description: lang.Markdown("Alias for using the same provider with different configurations for different resources, e.g. `eu-west`"),
 			},
+		},
+	},
+	Reference: &schema.BlockReference{
+		ScopeId: providerBlockScope,
+		Address: schema.Address{
+			schema.LabelValueStep{Index: 0},
+			schema.AttrValueStep{AttrName: "alias"},
 		},
 	},
 }
