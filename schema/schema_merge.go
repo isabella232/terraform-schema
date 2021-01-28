@@ -109,14 +109,18 @@ func (m *SchemaMerger) MergeWithJsonProviderSchemas(ps *tfjson.ProviderSchemas) 
 		detail := m.detailForSrcAddr(srcAddr)
 
 		for _, localRef := range localRefs {
+			pSchema := convertBodySchemaFromJson(detail, providerSchema)
+			pSchema.DocumentationURI = m.docsUriForProvider(srcAddr)
+
 			mergedSchema.Blocks["provider"].DependentBody[schema.NewSchemaKey(schema.DependencyKeys{
 				Labels: []schema.LabelDependent{
 					{Index: 0, Value: localRef.LocalName},
 				},
-			})] = convertBodySchemaFromJson(detail, providerSchema)
+			})] = pSchema
 
 			for rName, rJsonSchema := range provider.ResourceSchemas {
 				rSchema := convertBodySchemaFromJson(detail, rJsonSchema.Block)
+				rSchema.DocumentationURI = m.docsUriForResource(srcAddr, rName)
 
 				depKeys := schema.DependencyKeys{
 					Labels: []schema.LabelDependent{
@@ -140,6 +144,7 @@ func (m *SchemaMerger) MergeWithJsonProviderSchemas(ps *tfjson.ProviderSchemas) 
 
 			for dsName, dsJsonSchema := range provider.DataSourceSchemas {
 				dsSchema := convertBodySchemaFromJson(detail, dsJsonSchema.Block)
+				dsSchema.DocumentationURI = m.docsUriForResource(srcAddr, dsName)
 
 				depKeys := schema.DependencyKeys{
 					Labels: []schema.LabelDependent{
@@ -164,6 +169,65 @@ func (m *SchemaMerger) MergeWithJsonProviderSchemas(ps *tfjson.ProviderSchemas) 
 	}
 
 	return mergedSchema, nil
+}
+
+func (m *SchemaMerger) docsUriForProvider(addr addrs.Provider) string {
+	if !providerHasDocs(addr) {
+		return ""
+	}
+
+	version := "latest"
+	for pAddr, ver := range m.providerVersions {
+		if addr.Equals(pAddr) {
+			version = ver.String()
+		}
+	}
+
+	return fmt.Sprintf("https://registry.terraform.io/providers/%s/%s/%s/docs",
+		addr.Namespace, addr.Type, version)
+}
+
+func (m *SchemaMerger) docsUriForResource(addr addrs.Provider, name string) string {
+	if !providerHasDocs(addr) {
+		return ""
+	}
+	version := "latest"
+	for pAddr, ver := range m.providerVersions {
+		if addr.Equals(pAddr) {
+			version = ver.String()
+		}
+	}
+
+	return fmt.Sprintf("https://registry.terraform.io/providers/%s/%s/%s/docs/resources/%s",
+		addr.Namespace, addr.Type, version, name)
+}
+
+func (m *SchemaMerger) docsUriForDataSource(addr addrs.Provider, name string) string {
+	if !providerHasDocs(addr) {
+		return ""
+	}
+	version := "latest"
+	for pAddr, ver := range m.providerVersions {
+		if addr.Equals(pAddr) {
+			version = ver.String()
+		}
+	}
+
+	return fmt.Sprintf("https://registry.terraform.io/providers/%s/%s/%s/docs/data-sources/%s",
+		addr.Namespace, addr.Type, version, name)
+}
+
+func providerHasDocs(addr addrs.Provider) bool {
+	if addr.IsBuiltIn() {
+		// Ideally this should point to versioned TF core docs
+		// but there aren't any for the built-in provider yet
+		return false
+	}
+	if addr.Hostname != "registry.terraform.io" {
+		// docs URLs outside of the official Registry aren't standardized yet
+		return false
+	}
+	return true
 }
 
 func (m *SchemaMerger) detailForSrcAddr(addr addrs.Provider) string {
